@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>검정곡선 · 아스피린 함량 계산기</title>
+<style>
+  :root { --navy:#1F2A63; --vio:#6B3FA8; --teal:#1C8C9C; --amber:#F2A93B; --ink:#1E2340; --mute:#5B6478; --line:#DCD6F0; --lav:#F3F0FB; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif; color:var(--ink); background:linear-gradient(160deg,#F7F5FD,#EEF3FA); }
+  main { max-width:560px; margin:0 auto; padding:18px 14px 40px; }
+  h1 { font-size:21px; color:var(--navy); margin:4px 0 2px; font-weight:800; word-break:keep-all; }
+  .sub { color:var(--mute); font-size:13px; margin:0 0 14px; word-break:keep-all; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; box-shadow:0 3px 10px rgba(58,48,112,.07); }
+  .card h2 { font-size:15px; margin:0 0 10px; color:var(--vio); font-weight:800; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { background:var(--navy); color:#fff; font-weight:700; padding:7px 4px; }
+  th:first-child { border-radius:8px 0 0 0; } th:last-child { border-radius:0 8px 0 0; }
+  td { padding:5px 4px; border-bottom:1px solid #EEF0F5; text-align:center; }
+  td:first-child, th:first-child { font-weight:700; color:var(--navy); white-space:nowrap; width:58px; }
+  th:first-child { color:#fff; }
+  input[type=number] { width:100%; font:inherit; font-size:16px; padding:8px 6px; border:1.5px solid #CFD5E3; border-radius:9px; text-align:center; background:#FBFCFF; }
+  input[type=number]:focus { outline:none; border-color:var(--vio); background:#fff; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+  .row label { flex:1; font-size:14px; word-break:keep-all; }
+  .row input { flex:0 0 110px; }
+  .seg { display:flex; background:var(--lav); border-radius:10px; padding:3px; gap:3px; margin-top:6px; }
+  .seg button { flex:1; border:0; background:transparent; font:inherit; font-size:13px; padding:8px 4px; border-radius:8px; color:var(--mute); }
+  .seg button.on { background:#fff; color:var(--vio); font-weight:800; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .btns { display:flex; gap:8px; margin-top:10px; }
+  .btn { flex:1; border:0; font:inherit; font-size:14px; font-weight:700; padding:10px; border-radius:10px; background:var(--lav); color:var(--vio); }
+  .btn.primary { background:var(--vio); color:#fff; }
+  canvas { width:100%; height:auto; display:block; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+  .stat { background:var(--lav); border-radius:10px; padding:8px 6px; text-align:center; }
+  .stat b { display:block; font-size:16px; color:var(--navy); }
+  .stat span { font-size:12px; color:var(--mute); }
+  .steps div { display:flex; justify-content:space-between; gap:10px; padding:7px 2px; border-bottom:1px dashed #E3E6EF; font-size:14px; word-break:keep-all; }
+  .steps div b { white-space:nowrap; color:var(--navy); }
+  .final { margin-top:10px; background:linear-gradient(120deg,var(--vio),#8E5CC8); color:#fff; border-radius:14px; padding:12px; text-align:center; }
+  .final b { font-size:30px; display:block; }
+  .msg { font-size:13px; padding:8px 10px; border-radius:9px; margin-top:8px; word-break:keep-all; }
+  .warn { background:#FFF4E0; color:#9A5B00; } .ok { background:#E8F6EE; color:#1E7A45; }
+  .hint { font-size:12px; color:var(--mute); margin-top:6px; word-break:keep-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>검정곡선 · 아스피린 함량 계산기</h1>
+  <p class="sub">흡광도만 입력하면 그래프 · 추세선 · 함량(%)이 바로 계산돼요.</p>
+
+  <section class="card">
+    <h2>① 표준용액 흡광도</h2>
+    <table>
+      <thead><tr><th>용액</th><th>농도 (mg/L)</th><th>흡광도</th></tr></thead>
+      <tbody id="stdBody"></tbody>
+    </table>
+    <div class="seg" id="fitMode">
+      <button data-m="ab" class="on">y = ax + b</button>
+      <button data-m="a">원점 통과 (y = ax)</button>
+    </div>
+    <div class="btns">
+      <button class="btn" id="exBtn">예시 데이터</button>
+      <button class="btn" id="clrBtn">모두 지우기</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>② 검정곡선</h2>
+    <canvas id="cv" width="1040" height="760" aria-label="검정곡선 그래프"></canvas>
+    <div class="stats">
+      <div class="stat"><b id="sa">–</b><span>기울기 a</span></div>
+      <div class="stat"><b id="sb">–</b><span>y절편 b</span></div>
+      <div class="stat"><b id="sr">–</b><span>R²</span></div>
+    </div>
+    <div id="fitMsg"></div>
+  </section>
+
+  <section class="card">
+    <h2>③ 시료와 함량 계산</h2>
+    <div class="row"><label>시료 흡광도</label><input type="number" id="sampleA" step="0.001" inputmode="decimal" placeholder="예: 0.178"></div>
+    <details>
+      <summary class="hint">계산 조건 바꾸기 (희석 배수 · 부피 · 표시량)</summary>
+      <div class="row"><label>시험관 희석 배수 (1.0 → 10 mL)</label><input type="number" id="d1" value="10"></div>
+      <div class="row"><label>플라스크 희석 배수 (10.0 → 100 mL)</label><input type="number" id="d2" value="10"></div>
+      <div class="row"><label>시료 원액 부피 (L)</label><input type="number" id="vol" value="0.250" step="0.001"></div>
+      <div class="row"><label>분자량 비 (180.16 ÷ 138.12)</label><input type="number" id="mr" value="1.304" step="0.001"></div>
+      <div class="row"><label>표시량 (mg)</label><input type="number" id="label" value="500"></div>
+    </details>
+    <div class="steps" id="steps"></div>
+    <div class="final" id="final" hidden><span>표시량 대비 함량</span><b id="pct">–</b></div>
+    <div id="sMsg"></div>
+    <div class="btns"><button class="btn primary" id="copyBtn">결과 복사하기</button></div>
+    <div class="hint" id="copyMsg"></div>
+  </section>
+</main>
+<script>
+const STD = [["바탕",0,"0.000"],["S1",10,""],["S2",20,""],["S3",30,""],["S4",40,""]];
+const EX = ["0.000","0.118","0.233","0.351","0.462"];
+const $ = (id) => document.getElementById(id);
+let mode = "ab";
+const tb = $("stdBody");
+STD.forEach(([n,c,a],i)=>{
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${n}</td><td><input type="number" id="c${i}" value="${c}" inputmode="decimal"></td><td><input type="number" id="a${i}" value="${a}" step="0.001" inputmode="decimal" placeholder="0.000"></td>`;
+  tb.appendChild(tr);
+});
+const num = (id) => { const v = parseFloat($(id).value); return isFinite(v) ? v : null; };
+const fmt = (v,d) => (v==null||!isFinite(v)) ? "–" : v.toFixed(d);
+
+function fit(pts){
+  const n=pts.length; if(n<2) return null;
+  let a,b;
+  if(mode==="a"){ let sxy=0,sxx=0; pts.forEach(([x,y])=>{sxy+=x*y;sxx+=x*x;}); if(!sxx) return null; a=sxy/sxx; b=0; }
+  else { const mx=pts.reduce((s,p)=>s+p[0],0)/n, my=pts.reduce((s,p)=>s+p[1],0)/n;
+    let sxy=0,sxx=0; pts.forEach(([x,y])=>{sxy+=(x-mx)*(y-my);sxx+=(x-mx)**2;}); if(!sxx) return null; a=sxy/sxx; b=my-a*mx; }
+  const my=pts.reduce((s,p)=>s+p[1],0)/n;
+  let ssr=0,sst=0; pts.forEach(([x,y])=>{ssr+=(y-(a*x+b))**2; sst+=(y-my)**2;});
+  const r2 = sst ? 1-ssr/sst : null;
+  return {a,b,r2};
+}
+
+function draw(pts,f,sample){
+  const cv=$("cv"), g=cv.getContext("2d"), W=cv.width, H=cv.height;
+  const L=135,R=30,T=30,B=110;
+  g.clearRect(0,0,W,H);
+  const xs=pts.map(p=>p[0]).concat([40]), ys=pts.map(p=>p[1]).concat([0.5]);
+  if(sample) { xs.push(sample[0]); ys.push(sample[1]); }
+  const xmax=Math.ceil(Math.max(...xs)*1.1/5)*5||45;
+  const ymax=Math.ceil(Math.max(...ys)*1.1*10)/10||0.5;
+  const X=v=>L+v/xmax*(W-L-R), Y=v=>H-B-v/ymax*(H-T-B);
+  g.font="30px sans-serif"; g.fillStyle="#5B6478"; g.strokeStyle="#E3E6EF"; g.lineWidth=2;
+  const ystep = ymax>1?0.2:0.1;
+  for(let v=0; v<=ymax+1e-9; v+=ystep){ g.beginPath(); g.moveTo(L,Y(v)); g.lineTo(W-R,Y(v)); g.stroke(); g.textAlign="right"; g.textBaseline="middle"; g.fillText(v.toFixed(1),L-14,Y(v)); }
+  const xstep = xmax>60?20:10;
+  for(let v=0; v<=xmax+1e-9; v+=xstep){ g.textAlign="center"; g.textBaseline="top"; g.fillText(String(v),X(v),H-B+12); }
+  g.strokeStyle="#5B6478"; g.lineWidth=3; g.beginPath(); g.moveTo(L,T); g.lineTo(L,H-B); g.lineTo(W-R,H-B); g.stroke();
+  g.font="bold 30px sans-serif"; g.textAlign="center"; g.textBaseline="middle"; g.fillText("살리실산 농도 (mg/L)",(L+W-R)/2,H-30);
+  g.save(); g.translate(26,(T+H-B)/2); g.rotate(-Math.PI/2); g.fillText("흡광도",0,0); g.restore();
+  if(f){
+    const x0=0,x1=xmax; let y0=f.a*x0+f.b, y1=f.a*x1+f.b;
+    g.save(); g.beginPath(); g.rect(L,T,W-L-R,H-T-B); g.clip();
+    g.strokeStyle="#1C8C9C"; g.lineWidth=5; g.setLineDash([18,10]); g.beginPath(); g.moveTo(X(x0),Y(y0)); g.lineTo(X(x1),Y(y1)); g.stroke(); g.restore(); g.setLineDash([]);
+    g.font="bold 32px sans-serif"; g.textAlign="left"; g.textBaseline="top"; g.fillStyle="#1C8C9C";
+    const eq = mode==="a" ? `y = ${f.a.toFixed(5)}x` : `y = ${f.a.toFixed(5)}x ${f.b<0?"−":"+"} ${Math.abs(f.b).toFixed(4)}`;
+    g.fillText(eq, L+20, T+10); if(f.r2!=null) g.fillText(`R² = ${f.r2.toFixed(4)}`, L+20, T+52);
+  }
+  if(sample){
+    g.strokeStyle="#F2A93B"; g.lineWidth=3; g.setLineDash([8,7]);
+    g.beginPath(); g.moveTo(L,Y(sample[1])); g.lineTo(X(sample[0]),Y(sample[1])); g.lineTo(X(sample[0]),H-B); g.stroke(); g.setLineDash([]);
+  }
+  pts.forEach(([x,y])=>{ g.beginPath(); g.arc(X(x),Y(y),13,0,7); g.fillStyle="#6B3FA8"; g.fill(); g.lineWidth=4; g.strokeStyle="#fff"; g.stroke(); });
+  if(sample){ g.beginPath(); g.arc(X(sample[0]),Y(sample[1]),15,0,7); g.fillStyle="#F2A93B"; g.fill(); g.lineWidth=4; g.strokeStyle="#fff"; g.stroke(); }
+}
+
+let lastText="";
+function update(){
+  const pts=[]; for(let i=0;i<5;i++){ const c=num("c"+i), a=num("a"+i); if(c!=null&&a!=null) pts.push([c,a]); }
+  const f=fit(pts);
+  $("sa").textContent = f?fmt(f.a,5):"–"; $("sb").textContent = f?fmt(f.b,4):"–"; $("sr").textContent = f&&f.r2!=null?fmt(f.r2,4):"–";
+  let m="";
+  if(!f) m=`<div class="msg warn">점을 2개 이상 입력하면 추세선이 그려져요.</div>`;
+  else if(f.r2!=null && f.r2<0.99) m=`<div class="msg warn">R²가 0.99보다 작아요. 직선에서 가장 멀리 떨어진 점을 다시 측정해 보세요.</div>`;
+  else if(f.r2!=null) m=`<div class="msg ok">R² ≥ 0.99 — 좋은 검정곡선이에요.</div>`;
+  if(f && mode==="ab" && Math.abs(f.b)>0.01) m+=`<div class="msg warn">y절편 b가 0에서 많이 벗어나요. 영점(바탕)을 다시 확인해 보세요.</div>`;
+  $("fitMsg").innerHTML=m;
+
+  const A=num("sampleA"); let sample=null, sm="", html="";
+  $("final").hidden=true; lastText="";
+  if(f && A!=null && f.a){
+    const C=(A-f.b)/f.a, d1=num("d1")||10, d2=num("d2")||10, vol=num("vol")||0.25, mr=num("mr")||1.304, lab=num("label")||500;
+    const c2=C*d1, c3=c2*d2, mSal=c3*vol, mAsp=mSal*mr, pct=mAsp/lab*100;
+    sample=[C,A];
+    const rows=[["① 시료 시험관 농도 C",fmt(C,2)+" mg/L"],[`② 희석 시료 용액 (× ${d1})`,fmt(c2,1)+" mg/L"],[`③ 시료 원액 (× ${d2})`,fmt(c3,0)+" mg/L"],[`④ 살리실산 질량 (× ${vol} L)`,fmt(mSal,1)+" mg"],[`⑤ 아스피린 질량 (× ${mr})`,fmt(mAsp,1)+" mg"]];
+    html=rows.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join("");
+    $("pct").textContent=fmt(pct,1)+" %"; $("final").hidden=false;
+    const amax=Math.max(...pts.map(p=>p[1])), amin=Math.min(...pts.filter(p=>p[0]>0).map(p=>p[1]));
+    if(A>amax || A<amin) sm=`<div class="msg warn">시료 흡광도가 표준용액 범위(S1~S4) 밖이에요. 선생님께 알려요.</div>`;
+    lastText=`[검정곡선] a=${fmt(f.a,5)}, b=${fmt(f.b,4)}, R²=${f.r2!=null?fmt(f.r2,4):"-"}\n[시료] 흡광도 ${A} → C=${fmt(C,2)} mg/L → 아스피린 ${fmt(mAsp,1)} mg → 함량 ${fmt(pct,1)}%`;
+  }
+  $("steps").innerHTML=html; $("sMsg").innerHTML=sm;
+  draw(pts,f,sample);
+}
+document.querySelectorAll("input").forEach(el=>el.addEventListener("input",update));
+document.querySelectorAll("#fitMode button").forEach(b=>b.addEventListener("click",()=>{ mode=b.dataset.m; document.querySelectorAll("#fitMode button").forEach(x=>x.classList.toggle("on",x===b)); update(); }));
+$("exBtn").onclick=()=>{ EX.forEach((v,i)=>$("a"+i).value=v); $("sampleA").value="0.178"; update(); };
+$("clrBtn").onclick=()=>{ for(let i=1;i<5;i++) $("a"+i).value=""; $("a0").value="0.000"; $("sampleA").value=""; update(); };
+$("copyBtn").onclick=async()=>{ if(!lastText){ $("copyMsg").textContent="먼저 흡광도를 입력해 주세요."; return; }
+  try{ await navigator.clipboard.writeText(lastText); $("copyMsg").textContent="복사했어요! 학습지나 메모에 붙여 넣으세요."; }
+  catch(e){ $("copyMsg").textContent=lastText; } };
+document.fonts && document.fonts.ready.then(update);
+update();
+</script>
+</body>
+</html>
